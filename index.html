@@ -310,6 +310,11 @@
   <span id="cotizacion-banner-msg"></span>
 </div>
 
+<div id="carga-error-banner" style="display:none; background:#F3E1E1; border:1px solid #C77; color:#7a2b2b; padding:12px 18px; border-radius:10px; margin:0 36px 0; font-size:0.85rem;">
+  ⚠️ <span id="carga-error-msg"></span>
+  <button class="btn btn-secondary btn-sm" style="margin-left:10px;" onclick="cargarDatos()">Reintentar ahora</button>
+</div>
+
 <main>
 
   <!-- INGRESOS -->
@@ -849,7 +854,15 @@ function actualizarBannerCotizacion(hayARS, hayCotizacion){
 async function cargarDatos(){
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PEGAR_AQUI') !== -1) return;
   try{
-    const res = await fetchConTimeout(APPS_SCRIPT_URL, {}, 12000);
+    let res;
+    try{
+      // Primer intento: 20s (suele alcanzar salvo que el script esté "frío")
+      res = await fetchConTimeout(APPS_SCRIPT_URL, {}, 20000);
+    } catch(errPrimerIntento){
+      console.warn('Primer intento de carga tardó demasiado, reintentando con más tiempo...', errPrimerIntento);
+      // Reintento: 35s, por si Google Apps Script está iniciando ("cold start")
+      res = await fetchConTimeout(APPS_SCRIPT_URL, {}, 35000);
+    }
     const data = await res.json();
     ingresos = data.ingresos || [];
     egresos = data.egresos || [];
@@ -870,8 +883,15 @@ async function cargarDatos(){
     const hayARS = ingresos.some(i => i.Moneda === 'ARS') || egresos.some(e => (e.Moneda || 'ARS') === 'ARS');
     const hayCotizacion = Object.keys(cotizaciones).some(m => cotizaciones[m] && cotizaciones[m].valor);
     actualizarBannerCotizacion(hayARS, hayCotizacion);
+    document.getElementById('carga-error-banner').style.display = 'none';
   } catch(err){
     console.error('Error cargando datos', err);
+    const banner = document.getElementById('carga-error-banner');
+    const msg = document.getElementById('carga-error-msg');
+    msg.textContent = 'No se pudieron cargar los datos de Google Sheets (' +
+      (err && err.name === 'AbortError' ? 'tardó demasiado en responder' : (err.message || 'error de conexión')) +
+      '). Los valores en 0 que ves pueden no ser reales: probá reintentar.';
+    banner.style.display = 'block';
   }
 }
 
