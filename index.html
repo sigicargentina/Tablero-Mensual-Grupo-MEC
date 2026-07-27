@@ -668,6 +668,17 @@ let egresos = [];
 let cotizaciones = {}; // { 'YYYY-MM': { valor, origen } }
 let charts = {};
 let historicoOficialCache = null;
+
+// Evita que un fetch colgado (API caída, sin respuesta, CORS bloqueado, etc.)
+// deje el splash de carga girando para siempre: si no responde en TIMEOUT_MS,
+// se corta la espera y se sigue con lo que haya.
+function fetchConTimeout(url, options, timeoutMs){
+  timeoutMs = timeoutMs || 10000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, Object.assign({}, options, { signal: controller.signal }))
+    .finally(() => clearTimeout(timer));
+}
 let modoBloque1 = 'mes'; // 'mes' = del 1 del mes actual a hoy · 'total' = todo el histórico
 
 document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
@@ -838,7 +849,7 @@ function actualizarBannerCotizacion(hayARS, hayCotizacion){
 async function cargarDatos(){
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PEGAR_AQUI') !== -1) return;
   try{
-    const res = await fetch(APPS_SCRIPT_URL);
+    const res = await fetchConTimeout(APPS_SCRIPT_URL, {}, 12000);
     const data = await res.json();
     ingresos = data.ingresos || [];
     egresos = data.egresos || [];
@@ -1160,7 +1171,7 @@ async function guardarCotizacion(mes, origen){
 
 async function cargarHistoricoOficial(){
   if (historicoOficialCache) return historicoOficialCache;
-  const res = await fetch(DOLAR_HISTORICO_URL);
+  const res = await fetchConTimeout(DOLAR_HISTORICO_URL, {}, 8000);
   historicoOficialCache = await res.json();
   return historicoOficialCache;
 }
