@@ -430,7 +430,7 @@
         <table>
           <thead>
             <tr>
-              <th>Fecha venta</th><th>Producto</th><th>Lote</th><th>Moneda</th><th>Precio venta</th><th>Total a Cobrar</th>
+              <th>N°</th><th>Fecha venta</th><th>Producto</th><th>Lote</th><th>Moneda</th><th>Precio venta</th><th>Total a Cobrar</th>
               <th>Vendido por</th><th>Estado</th><th>Monto Cobrado</th><th>Saldo a cobrar</th><th>Tot. GrupoMec</th><th>Tot. María</th><th>Tot. Paula</th><th>Acciones</th>
             </tr>
           </thead>
@@ -494,6 +494,10 @@
             <label>Fecha</label>
             <input type="date" id="egreso-fecha">
           </div>
+          <div class="field">
+            <label>Concepto</label>
+            <input type="text" id="egreso-concepto" placeholder="Concepto del gasto">
+          </div>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" id="egreso-submit-btn">Guardar egreso</button>
@@ -508,7 +512,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Realizado por</th><th>Moneda</th><th>Monto</th><th>Acciones</th></tr>
+            <tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Descripción</th><th>Realizado por</th><th>Moneda</th><th>Monto</th><th>Acciones</th></tr>
           </thead>
           <tbody id="tbody-egresos"></tbody>
         </table>
@@ -936,14 +940,24 @@ function renderIngresos(){
   const tbody = document.getElementById('tbody-ingresos');
   tbody.innerHTML = '';
   if (!ingresos.length){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="14">Todavía no hay ventas cargadas.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">Todavía no hay ventas cargadas.</td></tr>';
     return;
   }
-  ingresos.forEach(it => {
+  // Ordenar por fecha de venta (las que no tienen fecha quedan al final)
+  const ordenados = [...ingresos].sort((a, b) => {
+    const fa = a.FechaVenta ? new Date(a.FechaVenta).getTime() : null;
+    const fb = b.FechaVenta ? new Date(b.FechaVenta).getTime() : null;
+    if (fa === null && fb === null) return 0;
+    if (fa === null) return 1;
+    if (fb === null) return -1;
+    return fa - fb;
+  });
+  ordenados.forEach((it, idx) => {
     const producto = it.Producto === 'Otro' ? (it.ProductoOtro || 'Otro') : it.Producto;
     const moneda = it.Moneda || 'USD';
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td class="num">${idx + 1}</td>
       <td>${it.FechaVenta ? toDateInput(it.FechaVenta) : '-'}</td>
       <td>${producto || '-'}</td>
       <td>${it.Lote || '-'}</td>
@@ -975,7 +989,8 @@ formEgreso.addEventListener('submit', async e => {
     RealizadoPor: document.getElementById('egreso-realizado-por').value,
     Moneda: document.getElementById('egreso-moneda').value,
     Monto: document.getElementById('egreso-monto').value,
-    Fecha: document.getElementById('egreso-fecha').value
+    Fecha: document.getElementById('egreso-fecha').value,
+    Concepto: document.getElementById('egreso-concepto').value
   };
   const id = document.getElementById('egreso-id').value;
   const status = document.getElementById('form-status-egreso');
@@ -1015,6 +1030,7 @@ function editarEgreso(id){
   document.getElementById('egreso-moneda').value = it.Moneda || 'ARS';
   document.getElementById('egreso-monto').value = it.Monto || '';
   document.getElementById('egreso-fecha').value = toDateInput(it.Fecha);
+  document.getElementById('egreso-concepto').value = it.Concepto || '';
   document.getElementById('egreso-form-title').textContent = 'Editando egreso';
   document.getElementById('egreso-submit-btn').textContent = 'Actualizar egreso';
   document.getElementById('egreso-cancel-btn').style.display = 'inline-block';
@@ -1031,7 +1047,7 @@ function renderEgresos(){
   const tbody = document.getElementById('tbody-egresos');
   tbody.innerHTML = '';
   if (!egresos.length){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Todavía no hay egresos cargados.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Todavía no hay egresos cargados.</td></tr>';
     return;
   }
   egresos.forEach(it => {
@@ -1039,6 +1055,7 @@ function renderEgresos(){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${it.Fecha ? toDateInput(it.Fecha) : '-'}</td>
+      <td>${it.Concepto || '-'}</td>
       <td>${it.Categoria || '-'}</td>
       <td>${it.Descripcion || '-'}</td>
       <td>${it.RealizadoPor || '-'}</td>
