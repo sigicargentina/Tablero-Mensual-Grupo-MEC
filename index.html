@@ -582,15 +582,15 @@
     <div class="card">
       <h2>Bloque 2 · Total Grupo MEC</h2>
       <div class="stat-grid">
-        <div class="stat-card"><div class="bar"></div><div class="tag">Total Grupo MEC</div><div class="val num" id="r-total-gmec">USD 0</div></div>
+        <div class="stat-card"><div class="bar"></div><div class="tag" id="r-tag-gmec">Total Grupo MEC</div><div class="val num" id="r-total-gmec">USD 0</div></div>
       </div>
     </div>
 
     <div class="card">
       <h2>Bloque 3 · María</h2>
       <div class="stat-grid">
-        <div class="stat-card pos"><div class="bar"></div><div class="tag">Ingresos María</div><div class="val num" id="r-ingresos-maria">USD 0</div></div>
-        <div class="stat-card neg"><div class="bar"></div><div class="tag">Egresos María</div><div class="val num" id="r-egresos-maria">USD 0</div></div>
+        <div class="stat-card pos"><div class="bar"></div><div class="tag" id="r-tag-ingresos-maria">Ingresos María</div><div class="val num" id="r-ingresos-maria">USD 0</div></div>
+        <div class="stat-card neg"><div class="bar"></div><div class="tag" id="r-tag-egresos-maria">Egresos María</div><div class="val num" id="r-egresos-maria">USD 0</div></div>
         <div class="stat-card"><div class="bar"></div><div class="tag">Saldo María</div><div class="val num" id="r-saldo-maria">USD 0</div></div>
       </div>
     </div>
@@ -598,8 +598,8 @@
     <div class="card">
       <h2>Bloque 4 · Paula</h2>
       <div class="stat-grid">
-        <div class="stat-card pos"><div class="bar"></div><div class="tag">Ingresos Paula</div><div class="val num" id="r-ingresos-paula">USD 0</div></div>
-        <div class="stat-card neg"><div class="bar"></div><div class="tag">Egresos Paula</div><div class="val num" id="r-egresos-paula">USD 0</div></div>
+        <div class="stat-card pos"><div class="bar"></div><div class="tag" id="r-tag-ingresos-paula">Ingresos Paula</div><div class="val num" id="r-ingresos-paula">USD 0</div></div>
+        <div class="stat-card neg"><div class="bar"></div><div class="tag" id="r-tag-egresos-paula">Egresos Paula</div><div class="val num" id="r-egresos-paula">USD 0</div></div>
         <div class="stat-card"><div class="bar"></div><div class="tag">Saldo Paula</div><div class="val num" id="r-saldo-paula">USD 0</div></div>
       </div>
     </div>
@@ -943,14 +943,14 @@ function renderIngresos(){
     tbody.innerHTML = '<tr class="empty-row"><td colspan="15">Todavía no hay ventas cargadas.</td></tr>';
     return;
   }
-  // Ordenar por fecha de venta (las que no tienen fecha quedan al final)
+  // Ordenar por fecha de venta, de la más reciente a la más antigua (las que no tienen fecha quedan al final)
   const ordenados = [...ingresos].sort((a, b) => {
     const fa = a.FechaVenta ? new Date(a.FechaVenta).getTime() : null;
     const fb = b.FechaVenta ? new Date(b.FechaVenta).getTime() : null;
     if (fa === null && fb === null) return 0;
     if (fa === null) return 1;
     if (fb === null) return -1;
-    return fa - fb;
+    return fb - fa;
   });
   ordenados.forEach((it, idx) => {
     const producto = it.Producto === 'Otro' ? (it.ProductoOtro || 'Otro') : it.Producto;
@@ -1210,14 +1210,17 @@ function renderResumen(){
     if (moneda === 'USD') egresosUsdPuro += r.valor; else egresosArsConvertido += r.valor;
   });
 
-  // Bloques 2, 3 y 4: siempre históricos (acumulado total)
+  // Bloques 2, 3 y 4: ahora respetan el mismo modo (mes actual / histórico) que el Bloque 1
   ingresos.filter(i => i.Cobrado === 'Sí').forEach(i => {
-    const mes = mesDeFecha(i.FechaVenta || i.FechaFirma);
+    const fechaRef = i.FechaVenta || i.FechaFirma;
+    if (!enElRango_(fechaRef)) return;
+    const mes = mesDeFecha(fechaRef);
     totalGmec += aUSD(i.TotalGrupoMec, i.Moneda, mes).valor;
     ingresosMaria += aUSD(i.TotalMaria, i.Moneda, mes).valor;
     ingresosPaula += aUSD(i.TotalPaula, i.Moneda, mes).valor;
   });
   egresos.forEach(e => {
+    if (!enElRango_(e.Fecha)) return;
     const mes = mesDeFecha(e.Fecha);
     const moneda = e.Moneda || 'ARS';
     const r = aUSD(e.Monto, moneda, mes);
@@ -1250,14 +1253,19 @@ function renderResumen(){
   document.getElementById('r-balance').textContent = fmt(totalIngresosUSD - totalEgresosUSD);
 
   // Bloque 2
+  document.getElementById('r-tag-gmec').textContent = 'Total Grupo MEC' + sufijo;
   document.getElementById('r-total-gmec').textContent = fmt(totalGmec);
 
   // Bloque 3 - María
+  document.getElementById('r-tag-ingresos-maria').textContent = 'Ingresos María' + sufijo;
+  document.getElementById('r-tag-egresos-maria').textContent = 'Egresos María' + sufijo;
   document.getElementById('r-ingresos-maria').textContent = fmt(ingresosMaria);
   document.getElementById('r-egresos-maria').textContent = fmt(egresoMaria);
   document.getElementById('r-saldo-maria').textContent = fmt(ingresosMaria - egresoMaria);
 
   // Bloque 4 - Paula
+  document.getElementById('r-tag-ingresos-paula').textContent = 'Ingresos Paula' + sufijo;
+  document.getElementById('r-tag-egresos-paula').textContent = 'Egresos Paula' + sufijo;
   document.getElementById('r-ingresos-paula').textContent = fmt(ingresosPaula);
   document.getElementById('r-egresos-paula').textContent = fmt(egresoPaula);
   document.getElementById('r-saldo-paula').textContent = fmt(ingresosPaula - egresoPaula);
