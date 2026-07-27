@@ -412,10 +412,14 @@
             <input type="number" id="ingreso-total-maria" step="0.01">
           </div>
           <div class="field">
-            <label>Total Paula</label>
+            <label>
+              Total Paula
+              <button type="button" id="btn-reset-5050" class="btn-icon" style="font-size:0.68rem; text-transform:none; letter-spacing:0; font-weight:600; color:var(--bordo); padding:0 0 0 6px;" title="Volver a dividir Total GrupoMec 50/50 entre María y Paula">↺ 50/50</button>
+            </label>
             <input type="number" id="ingreso-total-paula" step="0.01">
           </div>
         </div>
+        <p class="subtitle" id="ingreso-5050-hint" style="margin:8px 0 0;">Total María y Total Paula se calculan automáticamente como la mitad de Total GrupoMec. Si los edita a mano, dejan de actualizarse solos hasta que toque "↺ 50/50".</p>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" id="ingreso-submit-btn">Guardar ingreso</button>
           <button type="button" class="btn btn-secondary" id="ingreso-cancel-btn" style="display:none;">Cancelar edición</button>
@@ -699,6 +703,33 @@ function recalcularTotalCobrado(){
   document.getElementById('ingreso-total-cobrado').value = (v + c) || '';
 }
 document.getElementById('ingreso-hon-vendedor').addEventListener('input', recalcularTotalCobrado);
+
+// Total María / Total Paula = Total GrupoMec / 2 (automático, salvo edición manual)
+let divisionManual5050 = false;
+const inputGmec = document.getElementById('ingreso-total-gmec');
+const inputMaria = document.getElementById('ingreso-total-maria');
+const inputPaula = document.getElementById('ingreso-total-paula');
+const hintDivision5050 = document.getElementById('ingreso-5050-hint');
+
+function recalcularDivision5050(){
+  if (divisionManual5050) return;
+  const gmec = Number(inputGmec.value) || 0;
+  const mitad = gmec ? gmec / 2 : '';
+  inputMaria.value = mitad;
+  inputPaula.value = mitad;
+}
+function marcarDivisionManual(){
+  divisionManual5050 = true;
+  hintDivision5050.textContent = 'Total María y Total Paula fueron editados a mano. Toque "↺ 50/50" para volver a dividir Total GrupoMec automáticamente.';
+}
+inputGmec.addEventListener('input', recalcularDivision5050);
+inputMaria.addEventListener('input', marcarDivisionManual);
+inputPaula.addEventListener('input', marcarDivisionManual);
+document.getElementById('btn-reset-5050').addEventListener('click', () => {
+  divisionManual5050 = false;
+  hintDivision5050.textContent = 'Total María y Total Paula se calculan automáticamente como la mitad de Total GrupoMec. Si los edita a mano, dejan de actualizarse solos hasta que toque "↺ 50/50".';
+  recalcularDivision5050();
+});
 document.getElementById('ingreso-hon-comprador').addEventListener('input', recalcularTotalCobrado);
 
 function fmt(n, moneda){
@@ -892,6 +923,8 @@ function resetFormIngreso(){
   document.getElementById('ingreso-form-title').textContent = 'Cargar ingreso';
   document.getElementById('ingreso-submit-btn').textContent = 'Guardar ingreso';
   document.getElementById('ingreso-cancel-btn').style.display = 'none';
+  divisionManual5050 = false;
+  hintDivision5050.textContent = 'Total María y Total Paula se calculan automáticamente como la mitad de Total GrupoMec. Si los edita a mano, dejan de actualizarse solos hasta que toque "↺ 50/50".';
 }
 
 function editarIngreso(id){
@@ -917,6 +950,14 @@ function editarIngreso(id){
   document.getElementById('ingreso-total-gmec').value = it.TotalGrupoMec || '';
   document.getElementById('ingreso-total-maria').value = it.TotalMaria || '';
   document.getElementById('ingreso-total-paula').value = it.TotalPaula || '';
+  const gmecCargado = Number(it.TotalGrupoMec) || 0;
+  const mitadCargada = gmecCargado / 2;
+  const esDivisionManual = Math.abs((Number(it.TotalMaria) || 0) - mitadCargada) > 0.01 ||
+                            Math.abs((Number(it.TotalPaula) || 0) - mitadCargada) > 0.01;
+  divisionManual5050 = esDivisionManual;
+  hintDivision5050.textContent = esDivisionManual
+    ? 'Total María y Total Paula fueron editados a mano. Toque "↺ 50/50" para volver a dividir Total GrupoMec automáticamente.'
+    : 'Total María y Total Paula se calculan automáticamente como la mitad de Total GrupoMec. Si los edita a mano, dejan de actualizarse solos hasta que toque "↺ 50/50".';
   document.getElementById('ingreso-form-title').textContent = 'Editando ingreso';
   document.getElementById('ingreso-submit-btn').textContent = 'Actualizar ingreso';
   document.getElementById('ingreso-cancel-btn').style.display = 'inline-block';
@@ -1050,7 +1091,16 @@ function renderEgresos(){
     tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Todavía no hay egresos cargados.</td></tr>';
     return;
   }
-  egresos.forEach(it => {
+  // Ordenar por fecha, de la más reciente a la más antigua (los que no tienen fecha quedan al final)
+  const ordenados = [...egresos].sort((a, b) => {
+    const fa = a.Fecha ? new Date(a.Fecha).getTime() : null;
+    const fb = b.Fecha ? new Date(b.Fecha).getTime() : null;
+    if (fa === null && fb === null) return 0;
+    if (fa === null) return 1;
+    if (fb === null) return -1;
+    return fb - fa;
+  });
+  ordenados.forEach(it => {
     const moneda = it.Moneda || 'ARS';
     const tr = document.createElement('tr');
     tr.innerHTML = `
