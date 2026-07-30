@@ -871,8 +871,6 @@ async function cargarDatos(){
       if (c.Mes) cotizaciones[c.Mes] = { valor: Number(c.Cotizacion) || 0, origen: c.Origen || 'Manual' };
     });
 
-    await autoCompletarCotizaciones(false);
-
     renderIngresos();
     renderEgresos();
     renderResumen();
