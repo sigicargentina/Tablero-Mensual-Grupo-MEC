@@ -409,6 +409,10 @@
             <input type="number" id="ingreso-saldo-cobrar" step="0.01" placeholder="Monto pendiente">
           </div>
           <div class="field">
+            <label>Fecha de cobro</label>
+            <input type="date" id="ingreso-fecha-cobro">
+          </div>
+          <div class="field">
             <label>Total GrupoMec</label>
             <input type="number" id="ingreso-total-gmec" step="0.01">
           </div>
@@ -923,6 +927,7 @@ formIngreso.addEventListener('submit', async e => {
     Cobrado: (Number(document.getElementById('ingreso-monto-cobrado').value) >= Number(document.getElementById('ingreso-total-cobrado').value) && Number(document.getElementById('ingreso-total-cobrado').value) > 0) ? 'Sí' : 'No',
     SaldoACobrar: document.getElementById('ingreso-saldo-cobrar').value,
     MontoCobrado: document.getElementById('ingreso-monto-cobrado').value,
+    FechaCobro: document.getElementById('ingreso-fecha-cobro').value,
     TotalGrupoMec: document.getElementById('ingreso-total-gmec').value,
     TotalMaria: document.getElementById('ingreso-total-maria').value,
     TotalPaula: document.getElementById('ingreso-total-paula').value
@@ -976,6 +981,7 @@ function editarIngreso(id){
   document.getElementById('ingreso-fecha-firma').value = toDateInput(it.FechaFirma);
   document.getElementById('ingreso-monto-cobrado').value = it.MontoCobrado || '';
   document.getElementById('ingreso-saldo-cobrar').value = it.SaldoACobrar || '';
+  document.getElementById('ingreso-fecha-cobro').value = toDateInput(it.FechaCobro);
   document.getElementById('ingreso-total-gmec').value = it.TotalGrupoMec || '';
   document.getElementById('ingreso-total-maria').value = it.TotalMaria || '';
   document.getElementById('ingreso-total-paula').value = it.TotalPaula || '';
@@ -1151,7 +1157,7 @@ function renderEgresos(){
 // --- COTIZACIÓN ---
 function mesesUsados(){
   const set = new Set();
-  ingresos.forEach(i => { if (i.Moneda === 'ARS'){ const m = mesDeFecha(i.FechaVenta || i.FechaFirma); if (m) set.add(m); } });
+  ingresos.forEach(i => { if (i.Moneda === 'ARS'){ const m = mesDeFecha(i.FechaCobro || i.FechaVenta || i.FechaFirma); if (m) set.add(m); } });
   egresos.forEach(e => { if ((e.Moneda || 'ARS') === 'ARS'){ const m = mesDeFecha(e.Fecha); if (m) set.add(m); } });
   Object.keys(cotizaciones).forEach(m => set.add(m));
   return Array.from(set).sort();
@@ -1272,8 +1278,12 @@ function renderResumen(){
   let saldoPendienteUSD = 0, saldoPendienteCantidad = 0;
 
   // Bloque 1: respeta el modo (mes actual / histórico)
+  // Usa la fecha de cobro (cuando se confirmó "Ya se cobró") como referencia
+  // de mes, así el ingreso impacta en el mes en que realmente se cobró y no
+  // en el mes en que se cargó la venta. Si todavía no hay FechaCobro (ventas
+  // viejas o cobros marcados antes de este cambio), cae a FechaVenta/FechaFirma.
   ingresos.filter(i => i.Cobrado === 'Sí').forEach(i => {
-    const fechaRef = i.FechaVenta || i.FechaFirma;
+    const fechaRef = i.FechaCobro || i.FechaVenta || i.FechaFirma;
     if (!enElRango_(fechaRef)) return;
     const mes = mesDeFecha(fechaRef);
     const r = aUSD(i.TotalCobrado, i.Moneda, mes);
@@ -1291,7 +1301,7 @@ function renderResumen(){
 
   // Bloques 2, 3 y 4: ahora respetan el mismo modo (mes actual / histórico) que el Bloque 1
   ingresos.filter(i => i.Cobrado === 'Sí').forEach(i => {
-    const fechaRef = i.FechaVenta || i.FechaFirma;
+    const fechaRef = i.FechaCobro || i.FechaVenta || i.FechaFirma;
     if (!enElRango_(fechaRef)) return;
     const mes = mesDeFecha(fechaRef);
     totalGmec += aUSD(i.TotalGrupoMec, i.Moneda, mes).valor;
@@ -1377,7 +1387,11 @@ async function marcarComoCobrado(id){
   const it = ingresos.find(x => x.ID === id);
   if (!it) return;
   if (!confirm('¿Marcar esta venta como cobrada en su totalidad?')) return;
-  await enviar('editIngreso', { id, data: { Cobrado: 'Sí', MontoCobrado: it.TotalCobrado, SaldoACobrar: 0 } });
+  const data = { Cobrado: 'Sí', MontoCobrado: it.TotalCobrado, SaldoACobrar: 0 };
+  // Solo pisa FechaCobro si el ingreso todavía no tenía una cargada (para no
+  // sobreescribir una fecha ya corregida a mano desde el formulario).
+  if (!it.FechaCobro) data.FechaCobro = toDateInput(new Date());
+  await enviar('editIngreso', { id, data });
   await cargarDatos();
 }
 
@@ -1385,7 +1399,7 @@ async function marcarComoCobrado(id){
 function renderCharts(){
   const meses = {};
   ingresos.filter(i => i.Cobrado === 'Sí').forEach(i => {
-    const m = mesDeFecha(i.FechaVenta || i.FechaFirma);
+    const m = mesDeFecha(i.FechaCobro || i.FechaVenta || i.FechaFirma);
     if (!m) return;
     const r = aUSD(i.TotalCobrado, i.Moneda, m);
     if (r.sinCotizar) return;
