@@ -397,6 +397,19 @@
             </select>
           </div>
           <div class="field">
+            <label>Tercero (comisión externa)</label>
+            <select id="ingreso-tercero">
+              <option value="">Ninguno</option>
+              <option>Rodrigo</option>
+              <option>Ely</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div class="field hidden" id="field-tercero-otro">
+            <label>Aclarar nombre tercero</label>
+            <input type="text" id="ingreso-tercero-otro" placeholder="Nombre del tercero">
+          </div>
+          <div class="field">
             <label>Fecha de firma</label>
             <input type="date" id="ingreso-fecha-firma">
           </div>
@@ -405,8 +418,12 @@
             <input type="number" id="ingreso-monto-cobrado" step="0.01" placeholder="Monto ya recibido">
           </div>
           <div class="field">
-            <label>Saldo a cobrar</label>
-            <input type="number" id="ingreso-saldo-cobrar" step="0.01" placeholder="Monto pendiente">
+            <label>Saldo a Cobrar MEC</label>
+            <input type="number" id="ingreso-saldo-cobrar-mec" step="0.01" placeholder="Monto pendiente Grupo MEC">
+          </div>
+          <div class="field">
+            <label>Saldo a Cobrar Otros</label>
+            <input type="number" id="ingreso-saldo-cobrar-otros" step="0.01" placeholder="Monto pendiente del tercero">
           </div>
           <div class="field">
             <label>Fecha de cobro</label>
@@ -444,7 +461,7 @@
           <thead>
             <tr>
               <th>N°</th><th>Fecha venta</th><th>Producto</th><th>Lote</th><th>Moneda</th><th>Precio venta</th><th>Total a Cobrar</th>
-              <th>Vendido por</th><th>Estado</th><th>Monto Cobrado</th><th>Saldo a cobrar</th><th>Tot. GrupoMec</th><th>Tot. María</th><th>Tot. Paula</th><th>Acciones</th>
+              <th>Vendido por</th><th>Tercero</th><th>Estado</th><th>Monto Cobrado</th><th>Saldo MEC</th><th>Saldo Otros</th><th>Tot. GrupoMec</th><th>Tot. María</th><th>Tot. Paula</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody id="tbody-ingresos"></tbody>
@@ -577,15 +594,16 @@
       </div>
       <div class="stat-grid">
         <div class="stat-card pos"><div class="bar"></div><div class="tag" id="r-tag-ingresos">Total ingresos cobrados</div><div class="val num" id="r-total-ingresos">USD 0</div><div class="sub" id="r-total-ingresos-sub"></div></div>
-        <div class="stat-card"><div class="bar"></div><div class="tag">Saldo a cobrar (pendiente)</div><div class="val num" id="r-saldo-cobrar">USD 0</div><div class="sub" id="r-saldo-cobrar-sub"></div></div>
+        <div class="stat-card"><div class="bar"></div><div class="tag">Saldo Pendiente MEC</div><div class="val num" id="r-saldo-cobrar-mec">USD 0</div><div class="sub" id="r-saldo-cobrar-mec-sub"></div></div>
         <div class="stat-card neg"><div class="bar"></div><div class="tag" id="r-tag-egresos">Total egresos</div><div class="val num" id="r-total-egresos">USD 0</div><div class="sub" id="r-total-egresos-sub"></div></div>
         <div class="stat-card"><div class="bar"></div><div class="tag" id="r-tag-balance">Balance neto al día de hoy</div><div class="val num" id="r-balance">USD 0</div></div>
       </div>
+      <div class="stat-grid" id="stat-grid-terceros-pendientes" style="margin-top:14px;"></div>
       <div class="confirmar-cobros">
         <h3>Confirmar montos a cobrar</h3>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Producto</th><th>Lote</th><th>Saldo Pendiente</th><th>Acción</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Lote</th><th>Saldo MEC</th><th>Saldo Otros</th><th>Acción</th></tr></thead>
             <tbody id="tbody-saldo-cobrar-resumen"></tbody>
           </table>
         </div>
@@ -715,6 +733,27 @@ document.getElementById('ingreso-producto').addEventListener('change', e => {
 document.getElementById('egreso-categoria').addEventListener('change', e => {
   document.getElementById('field-egreso-otros').classList.toggle('hidden', e.target.value !== 'Otros');
 });
+document.getElementById('ingreso-tercero').addEventListener('change', e => {
+  document.getElementById('field-tercero-otro').classList.toggle('hidden', e.target.value !== 'Otro');
+});
+
+// Nombre del tercero para mostrar (usa la aclaración si eligió "Otro")
+function nombreTercero(it){
+  if (!it.Tercero) return '';
+  return it.Tercero === 'Otro' ? (it.TerceroOtro || 'Otro') : it.Tercero;
+}
+// Saldo pendiente de Grupo MEC de un ingreso, con compatibilidad hacia atrás:
+// si no tiene el campo nuevo SaldoACobrarMEC cargado, usa el SaldoACobrar
+// viejo completo (ventas cargadas antes de separar MEC/Otros eran 100% MEC).
+function saldoMEC(it){
+  if (it.SaldoACobrarMEC !== undefined && it.SaldoACobrarMEC !== '' && it.SaldoACobrarMEC !== null) return Number(it.SaldoACobrarMEC) || 0;
+  return Number(it.SaldoACobrar) || 0;
+}
+// Saldo pendiente del tercero de un ingreso.
+function saldoOtros(it){
+  if (it.SaldoACobrarOtros !== undefined && it.SaldoACobrarOtros !== '' && it.SaldoACobrarOtros !== null) return Number(it.SaldoACobrarOtros) || 0;
+  return 0;
+}
 
 // Total cobrado = Honorarios vendedor + Honorarios comprador (automático)
 function recalcularTotalCobrado(){
@@ -923,9 +962,12 @@ formIngreso.addEventListener('submit', async e => {
     CompartidoInmo: document.getElementById('ingreso-compartido').value,
     Sena: document.getElementById('ingreso-sena').value,
     VendidoPor: document.getElementById('ingreso-vendido-por').value,
+    Tercero: document.getElementById('ingreso-tercero').value,
+    TerceroOtro: document.getElementById('ingreso-tercero-otro').value,
     FechaFirma: document.getElementById('ingreso-fecha-firma').value,
     Cobrado: (Number(document.getElementById('ingreso-monto-cobrado').value) >= Number(document.getElementById('ingreso-total-cobrado').value) && Number(document.getElementById('ingreso-total-cobrado').value) > 0) ? 'Sí' : 'No',
-    SaldoACobrar: document.getElementById('ingreso-saldo-cobrar').value,
+    SaldoACobrarMEC: document.getElementById('ingreso-saldo-cobrar-mec').value,
+    SaldoACobrarOtros: document.getElementById('ingreso-saldo-cobrar-otros').value,
     MontoCobrado: document.getElementById('ingreso-monto-cobrado').value,
     FechaCobro: document.getElementById('ingreso-fecha-cobro').value,
     TotalGrupoMec: document.getElementById('ingreso-total-gmec').value,
@@ -954,6 +996,7 @@ function resetFormIngreso(){
   formIngreso.reset();
   document.getElementById('ingreso-id').value = '';
   document.getElementById('field-producto-otro').classList.add('hidden');
+  document.getElementById('field-tercero-otro').classList.add('hidden');
   document.getElementById('ingreso-form-title').textContent = 'Cargar ingreso';
   document.getElementById('ingreso-submit-btn').textContent = 'Guardar ingreso';
   document.getElementById('ingreso-cancel-btn').style.display = 'none';
@@ -978,9 +1021,13 @@ function editarIngreso(id){
   document.getElementById('ingreso-compartido').value = it.CompartidoInmo || 'No';
   document.getElementById('ingreso-sena').value = it.Sena || '';
   document.getElementById('ingreso-vendido-por').value = it.VendidoPor || '';
+  document.getElementById('ingreso-tercero').value = it.Tercero || '';
+  document.getElementById('field-tercero-otro').classList.toggle('hidden', it.Tercero !== 'Otro');
+  document.getElementById('ingreso-tercero-otro').value = it.TerceroOtro || '';
   document.getElementById('ingreso-fecha-firma').value = toDateInput(it.FechaFirma);
   document.getElementById('ingreso-monto-cobrado').value = it.MontoCobrado || '';
-  document.getElementById('ingreso-saldo-cobrar').value = it.SaldoACobrar || '';
+  document.getElementById('ingreso-saldo-cobrar-mec').value = saldoMEC(it) || '';
+  document.getElementById('ingreso-saldo-cobrar-otros').value = saldoOtros(it) || '';
   document.getElementById('ingreso-fecha-cobro').value = toDateInput(it.FechaCobro);
   document.getElementById('ingreso-total-gmec').value = it.TotalGrupoMec || '';
   document.getElementById('ingreso-total-maria').value = it.TotalMaria || '';
@@ -1016,7 +1063,7 @@ function renderIngresos(){
   const tbody = document.getElementById('tbody-ingresos');
   tbody.innerHTML = '';
   if (!ingresos.length){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">Todavía no hay ventas cargadas.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="17">Todavía no hay ventas cargadas.</td></tr>';
     return;
   }
   // Ordenar por fecha de venta, de la más reciente a la más antigua (las que no tienen fecha quedan al final)
@@ -1041,9 +1088,11 @@ function renderIngresos(){
       <td class="num">${fmt(it.PrecioVenta, moneda)}</td>
       <td class="num">${fmt(it.TotalCobrado, moneda)}</td>
       <td>${it.VendidoPor || '-'}</td>
+      <td>${nombreTercero(it) || '-'}</td>
       <td><span class="badge ${it.Cobrado === 'Sí' ? 'si' : 'no'}">${it.Cobrado === 'Sí' ? 'Cobrado' : 'Pendiente'}</span></td>
       <td class="num">${fmt(it.MontoCobrado, moneda)}</td>
-      <td class="num">${it.Cobrado === 'Sí' ? '-' : fmt(it.SaldoACobrar, moneda)}</td>
+      <td class="num">${it.Cobrado === 'Sí' ? '-' : fmt(saldoMEC(it), moneda)}</td>
+      <td class="num">${it.Cobrado === 'Sí' ? '-' : fmt(saldoOtros(it), moneda)}</td>
       <td class="num">${fmt(it.TotalGrupoMec, moneda)}</td>
       <td class="num">${fmt(it.TotalMaria, moneda)}</td>
       <td class="num">${fmt(it.TotalPaula, moneda)}</td>
@@ -1275,7 +1324,8 @@ function renderResumen(){
   let egresoMaria = 0, egresoPaula = 0;
   let ingresosUsdPuro = 0, ingresosArsConvertido = 0;
   let egresosUsdPuro = 0, egresosArsConvertido = 0;
-  let saldoPendienteUSD = 0, saldoPendienteCantidad = 0;
+  let saldoPendienteMEC_USD = 0, saldoPendienteMEC_Cantidad = 0;
+  const terceroPendientes = {}; // nombre -> USD acumulado
 
   // Bloque 1: respeta el modo (mes actual / histórico)
   // Usa la fecha de cobro (cuando se confirmó "Ya se cobró") como referencia
@@ -1320,8 +1370,16 @@ function renderResumen(){
 
   ingresos.filter(i => i.Cobrado !== 'Sí').forEach(i => {
     const mes = mesDeFecha(i.FechaVenta || i.FechaFirma);
-    saldoPendienteUSD += aUSD(i.SaldoACobrar, i.Moneda, mes).valor;
-    saldoPendienteCantidad++;
+    const mec = saldoMEC(i);
+    const otros = saldoOtros(i);
+    if (mec){
+      saldoPendienteMEC_USD += aUSD(mec, i.Moneda, mes).valor;
+      saldoPendienteMEC_Cantidad++;
+    }
+    if (otros){
+      const nombre = nombreTercero(i) || 'Otros';
+      terceroPendientes[nombre] = (terceroPendientes[nombre] || 0) + aUSD(otros, i.Moneda, mes).valor;
+    }
   });
 
   // Bloque 1
@@ -1332,10 +1390,19 @@ function renderResumen(){
   document.getElementById('r-total-ingresos').textContent = fmt(totalIngresosUSD);
   document.getElementById('r-total-ingresos-sub').textContent =
     `USD directo: ${fmt(ingresosUsdPuro)} · convertido de ARS: ${fmt(ingresosArsConvertido)}`;
-  document.getElementById('r-saldo-cobrar').textContent = fmt(saldoPendienteUSD);
-  document.getElementById('r-saldo-cobrar-sub').textContent = saldoPendienteCantidad
-    ? `${saldoPendienteCantidad} venta(s) pendiente(s) de cobro`
-    : 'No hay ventas pendientes';
+  document.getElementById('r-saldo-cobrar-mec').textContent = fmt(saldoPendienteMEC_USD);
+  document.getElementById('r-saldo-cobrar-mec-sub').textContent = saldoPendienteMEC_Cantidad
+    ? `${saldoPendienteMEC_Cantidad} venta(s) con saldo pendiente para Grupo MEC`
+    : 'No hay saldo pendiente para Grupo MEC';
+
+  const contenedorTerceros = document.getElementById('stat-grid-terceros-pendientes');
+  contenedorTerceros.innerHTML = '';
+  Object.keys(terceroPendientes).sort().forEach(nombre => {
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    card.innerHTML = `<div class="bar"></div><div class="tag">Saldo Pendiente ${nombre}</div><div class="val num">${fmt(terceroPendientes[nombre])}</div>`;
+    contenedorTerceros.appendChild(card);
+  });
   document.getElementById('r-total-egresos').textContent = fmt(totalEgresosUSD);
   document.getElementById('r-total-egresos-sub').textContent =
     `USD directo: ${fmt(egresosUsdPuro)} · convertido de ARS: ${fmt(egresosArsConvertido)}`;
@@ -1367,17 +1434,20 @@ function renderSaldoCobrarResumen(){
   tbody.innerHTML = '';
   const pendientes = ingresos.filter(i => i.Cobrado !== 'Sí');
   if (!pendientes.length){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No hay ventas pendientes de cobro.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No hay ventas pendientes de cobro.</td></tr>';
     return;
   }
   pendientes.forEach(it => {
     const producto = it.Producto === 'Otro' ? (it.ProductoOtro || 'Otro') : it.Producto;
     const moneda = it.Moneda || 'USD';
+    const otros = saldoOtros(it);
+    const nombre = nombreTercero(it);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${producto || '-'}</td>
       <td>${it.Lote || '-'}</td>
-      <td class="num">${fmt(it.SaldoACobrar, moneda)}</td>
+      <td class="num">${fmt(saldoMEC(it), moneda)}</td>
+      <td class="num">${otros ? fmt(otros, moneda) + (nombre ? ` (${nombre})` : '') : '-'}</td>
       <td><button class="btn btn-secondary btn-sm" onclick="marcarComoCobrado('${it.ID}')">Ya se cobró</button></td>`;
     tbody.appendChild(tr);
   });
@@ -1387,7 +1457,7 @@ async function marcarComoCobrado(id){
   const it = ingresos.find(x => x.ID === id);
   if (!it) return;
   if (!confirm('¿Marcar esta venta como cobrada en su totalidad?')) return;
-  const data = { Cobrado: 'Sí', MontoCobrado: it.TotalCobrado, SaldoACobrar: 0 };
+  const data = { Cobrado: 'Sí', MontoCobrado: it.TotalCobrado, SaldoACobrar: 0, SaldoACobrarMEC: 0, SaldoACobrarOtros: 0 };
   // Solo pisa FechaCobro si el ingreso todavía no tenía una cargada (para no
   // sobreescribir una fecha ya corregida a mano desde el formulario).
   if (!it.FechaCobro) data.FechaCobro = toDateInput(new Date());
